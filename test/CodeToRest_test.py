@@ -649,7 +649,7 @@ class TestCodeToRest(object):
                 ' continuing on this line\n'
                 'and ending on this line \n', ['Powershell'])
 
-    # GAS. Pygments does not lex multi-line comments, therefore CodeChat 
+    # GAS. Pygments does not lex multi-line comments, therefore CodeChat
     # does not support them.
     def test_37_a(self):
         self.mt('# comment\n',
@@ -733,7 +733,6 @@ class TestCodeToRest(object):
                 'line\n'
                 'comment\n\n', ['AutoIt'])
 
-
     # Perl.
     def test_44(self):
         self.mt('print "Hello World!"\n'
@@ -742,13 +741,13 @@ class TestCodeToRest(object):
                 ' print "Hello World!"\n' +
                 ef +
                 sl(-2) +
-                'Comment here\n', ['Perl'])
+                'Comment here\n', ['Perl', 'Perl6'])
 
     def test_45(self):
         self.mt('print "Hello World!"\n',
                 bf +
                 ' print "Hello World!"\n' +
-                ef, ['Perl'])
+                ef, ['Perl', 'Perl6'])
 
     def test_46_a(self):
         self.mt('=pod\n'
@@ -781,12 +780,15 @@ class TestCodeToRest(object):
                 'comment\n'
                 '=cut\n',
                 sl(-3) +
-                '\n'
                 'multi-\n'
                 'line\n'
                 'comment\n'
                 '\n', ['Perl'])
 
+<<<<<<< HEAD
+    # New comment syntax in Perl6. No PODs supported.
+    def test_49(self):
+=======
     # Perl6.
     def test_47_a(self):
         self.mt('# Comment here\n',
@@ -805,6 +807,7 @@ class TestCodeToRest(object):
     def test_48(self):
         print(code_to_rest_string(
                 '#`( embedded comment)\n', alias = 'Perl6'))
+>>>>>>> 17d8675... update: cleanup
         self.mt('#`( embedded comment)\n',
                 sl(-3) +
                 'embedded comment\n', ['Perl6'])
@@ -1122,8 +1125,13 @@ class TestCodeToRest(object):
                 sl(-2) +
                 'Comment here\n', ['Eiffel'])
 
+<<<<<<< HEAD
+    # VHDL.
+    def test_80(self):
+=======
     # vhdl.
     def test_77(self):
+>>>>>>> 17d8675... update: cleanup
         self.mt('assert false report "Hello World!"\n'
                 '-- Comment here\n',
                 bf +
@@ -1133,8 +1141,12 @@ class TestCodeToRest(object):
                 'Comment here\n', ['vhdl'])
 
     # COBOL.
+<<<<<<< HEAD
+    def test_81_a(self):
+=======
 
     def test_78_a(self):
+>>>>>>> 17d8675... update: cleanup
         self.mt('       DISPLAY "Hello World!".\n'
                 '      * Comment here\n',
                 bf +
@@ -1157,11 +1169,14 @@ class TestCodeToRest(object):
                 sl(-2) +
                 'Comment here\n', ['COBOL'])
 
+<<<<<<< HEAD
+=======
     def test_78_d(self):
         self.mt('      -- Comment here\n',
                 sl(-3) +
                 'Comment here\n', ['COBOL'])
 
+>>>>>>> 17d8675... update: cleanup
     # INI.
     def test_79_a(self):
         self.mt('; Comment here\n',
