@@ -51,10 +51,12 @@ from docutils.parsers.rst import directives, Directive
 # For the docutils default stylesheet and template
 import docutils.writers.html4css1
 from docutils.writers.html4css1 import Writer
-from pygments import lex
 from pygments.lexers import get_lexer_for_filename, get_lexer_by_name, \
     get_lexer_for_mimetype, guess_lexer_for_filename, guess_lexer
+from pygments.util import text_type, guess_decode
+from pygments.lexer import _encoding_map
 from pygments.token import Token
+import ast
 #
 # Local application imports
 # -------------------------
@@ -259,8 +261,9 @@ def _lexer_to_rest(
     comment_is_block = not cdi[0]
 
     # \1. Invoke a Pygments lexer on the provided source code, obtaining an
-    #     iterable of tokens.
-    token_iter = lex(code_str, lexer)
+    #     iterable of tokens. Also analyze Python code for docstrings.
+    #
+    token_iter = _pygments_lexer(code_str, lexer)
 
     # \2. Combine tokens from the lexer into three groups: whitespace, comment,
     #     or other.
@@ -282,6 +285,102 @@ def _lexer_to_rest(
     _generate_rest(classified_group, out_file)
 #
 #
+# Step 1 of lexer_to_rest_
+# ------------------------
+def _pygments_lexer(
+  # See code_str_.
+  code_str,
+  # See lexer_.
+  lexer):
+
+    # Pygments does some cleanup on the code given to it before lexing it. If this is Python code, we want to run AST on that cleaned-up version, so that AST results can be correlated with Pygments results. However, Pygments doesn't offer a way to do this; so, add that ability in to the detected lexer.
+    preprocessed_code_str = _pygments_get_tokens_preprocess(lexer, code_str)
+    # Process this with AST if this is Python code, to find docstrings
+
+    # Determine if file is Python
+    if lexer.name == 'Python' or lexer.name == 'Python3':
+        # Run AST analysis and store it in ast_result
+        global ast_lineno
+        global ast_docstring
+        for _ in ast.walk(ast.parse(preprocessed_code_str)):
+            try:
+                d = ast.get_docstring(_)
+                if d:
+                    ast_lineno = _.body[0].lineno
+                    ast_docstring = d
+            except (AttributeError, TypeError):
+                pass
+        pass
+
+    # Now, run the lexer.
+    return lexer.get_tokens_unprocessed(preprocessed_code_str)
+#
+# Pygments monkeypatching
+# ^^^^^^^^^^^^^^^^^^^^^^^
+# Provide a way to perform preprocessing on text before lexing it. This code was copied from pygments.lexer.Lexer.get_token, v. 2.1.3.
+def _pygments_get_tokens_preprocess(self, text, unfiltered=False):
+    """
+    Return an iterable of (tokentype, value) pairs generated from
+    `text`. If `unfiltered` is set to `True`, the filtering mechanism
+    is bypassed even if filters are defined.
+
+    Also preprocess the text, i.e. expand tabs and strip it if
+    wanted and applies registered filters.
+    """
+    if not isinstance(text, text_type):
+        if self.encoding == 'guess':
+            text, _ = guess_decode(text)
+        elif self.encoding == 'chardet':
+            try:
+                import chardet
+            except ImportError:
+                raise ImportError('To enable chardet encoding guessing, '
+                                  'please install the chardet library '
+                                  'from http://chardet.feedparser.org/')
+            # check for BOM first
+            decoded = None
+            for bom, encoding in _encoding_map:
+                if text.startswith(bom):
+                    decoded = text[len(bom):].decode(encoding, 'replace')
+                    break
+            # no BOM found, so use chardet
+            if decoded is None:
+                enc = chardet.detect(text[:1024])  # Guess using first 1KB
+                decoded = text.decode(enc.get('encoding') or 'utf-8',
+                                      'replace')
+            text = decoded
+        else:
+            text = text.decode(self.encoding)
+            if text.startswith(u'\ufeff'):
+                text = text[len(u'\ufeff'):]
+    else:
+        if text.startswith(u'\ufeff'):
+            text = text[len(u'\ufeff'):]
+
+    # text now *is* a unicode string
+    text = text.replace('\r\n', '\n')
+    text = text.replace('\r', '\n')
+    if self.stripall:
+        text = text.strip()
+    elif self.stripnl:
+        text = text.strip('\n')
+    if self.tabsize > 0:
+        text = text.expandtabs(self.tabsize)
+    if self.ensurenl and not text.endswith('\n'):
+        text += '\n'
+    # EDIT: This is not from the original Pygments code. It was added to return the preprocessed text.
+    return text
+
+    # EDIT: This was removed, since we want the index of each token.
+    ##def streamer():
+    ##    for _, t, v in self.get_tokens_unprocessed(text):
+    ##        yield t, v
+    ##stream = streamer()
+    ##if not unfiltered:
+    ##    stream = apply_filters(stream, self.filters, self)
+    ##return stream
+#
+#
 # Step 2 of lexer_to_rest_
 # ------------------------
 # Given tokens, group them.
@@ -301,18 +400,35 @@ def _group_lexer_tokens(
 
 
     # Keep track of the current group and string.
-    tokentype, current_string = next(iter_token)
+    index, tokentype, current_string = next(iter_token)
     current_group = _group_for_tokentype(tokentype, comment_is_inline,
                                          comment_is_block)
     _debug_print('tokentype = {}, string = {}\n'.
                 format(tokentype, [current_string]))
 
     # Walk through tokens.
-    for tokentype, string in iter_token:
+    compare = False
+    token_lineno = 1
+    for index, tokentype, string in iter_token:
+        if current_string == '\n':
+            # keep track of every newline
+            token_lineno += 1
+        if compare:
+            # compare token containing docstring with ast results
+            global ast_lineno
+            global ast_docstring
+            token_docstring = current_string[3:-3]
+            if (ast_lineno == token_lineno and ast_docstring == token_docstring):
+                # replace token with docstring in _group_for_tokentype
+                current_string = current_string[3:-3]
+                pass
+            compare = False
+            pass
+        if tokentype == Token.Literal.String.Doc:
+            # compare next token
+            compare = True
         group = _group_for_tokentype(tokentype, comment_is_inline,
           comment_is_block)
-        _debug_print('tokentype = {}, string = {}\n'.
-                    format(tokentype, [string]))
 
         # If there's a change in group, yield what we've accumulated so far,
         # then initialize the state to the newly-found group and string.

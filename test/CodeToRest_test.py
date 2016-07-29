@@ -38,7 +38,6 @@ import re
 # Used to run docutils.
 from docutils import core
 from pygments.token import Token
-from pygments import lex
 from pygments.lexers import get_lexer_by_name
 #
 # Local application imports
@@ -46,7 +45,8 @@ from pygments.lexers import get_lexer_by_name
 from CodeChat.CodeToRest import code_to_rest_string, code_to_html_file
 from CodeChat.CodeToRest import _remove_comment_delim, _group_lexer_tokens, \
   _gather_groups_on_newlines, _is_rest_comment, _classify_groups, \
-  _generate_rest, _is_space_indented_line, _is_delim_indented_line, _GROUP
+  _generate_rest, _is_space_indented_line, _is_delim_indented_line, _GROUP, \
+  _pygments_lexer
 from CodeChat.CommentDelimiterInfo import COMMENT_DELIMITER_INFO
 
 
@@ -666,12 +666,12 @@ class TestCodeToRest(object):
                 'comment\n', ['GAS'])
 
     # autohotkey.
-    def test_38_a(self):
+    def test_39_a(self):
         self.mt('; Comment here\n',
                 sl(-3) +
                 'Comment here\n', ['autohotkey'])
 
-    def test_38_b(self):
+    def test_39_b(self):
         self.mt('Msgbox, Hello World!\n'
                 '; Comment here\n',
                 bf +
@@ -680,7 +680,7 @@ class TestCodeToRest(object):
                 sl(-2) +
                 'Comment here\n', ['autohotkey'])
 
-    def test_39(self):
+    def test_40(self):
         self.mt('/*\n'
                 'multi-\n'
                 'line\n'
@@ -692,7 +692,7 @@ class TestCodeToRest(object):
                 'comment\n\n', ['autohotkey'])
 
     # Prolog.
-    def test_40(self):
+    def test_41(self):
         self.mt('?- write("Hello world!").\n'
                 '% Comment here\n',
                 bf +
@@ -701,7 +701,7 @@ class TestCodeToRest(object):
                 sl(-2) +
                 'Comment here\n', ['Prolog'])
 
-    def test_41(self):
+    def test_42(self):
         self.mt('/*\n'
                 'multi-\n'
                 'line\n'
@@ -713,7 +713,7 @@ class TestCodeToRest(object):
                 'comment\n\n', ['Prolog'])
 
     # AutoIt.
-    def test_42(self):
+    def test_43(self):
         self.mt('ConsoleWrite(\'Hello World!\')\n'
                 '; Comment here\n',
                 bf +
@@ -722,7 +722,7 @@ class TestCodeToRest(object):
                 sl(-2) +
                 'Comment here\n', ['AutoIt'])
 
-    def test_43(self):
+    def test_44(self):
         self.mt('#cs\n'
                 'multi-\n'
                 'line\n'
@@ -734,7 +734,7 @@ class TestCodeToRest(object):
                 'comment\n\n', ['AutoIt'])
 
     # Perl.
-    def test_44(self):
+    def test_45(self):
         self.mt('print "Hello World!"\n'
                 '# Comment here\n',
                 bf +
@@ -743,13 +743,13 @@ class TestCodeToRest(object):
                 sl(-2) +
                 'Comment here\n', ['Perl', 'Perl6'])
 
-    def test_45(self):
+    def test_46(self):
         self.mt('print "Hello World!"\n',
                 bf +
                 ' print "Hello World!"\n' +
                 ef, ['Perl', 'Perl6'])
 
-    def test_46_a(self):
+    def test_47_a(self):
         self.mt('=pod\n'
                 'multi-\n'
                 'line\n'
@@ -761,7 +761,7 @@ class TestCodeToRest(object):
                 'comment\n'
                 '\n', ['Perl'])
 
-    def test_46_b(self):
+    def test_47_b(self):
         self.mt('=for\n'
                 'multi-\n'
                 'line\n'
@@ -773,7 +773,7 @@ class TestCodeToRest(object):
                 'comment\n'
                 '\n', ['Perl'])
 
-    def test_46_c(self):
+    def test_47_c(self):
         self.mt('=begin\n'
                 'multi-\n'
                 'line\n'
@@ -785,35 +785,20 @@ class TestCodeToRest(object):
                 'comment\n'
                 '\n', ['Perl'])
 
-    # Perl6.
-    def test_47_a(self):
-        self.mt('# Comment here\n',
-                sl(-3) +
-                'Comment here\n', ['Perl6'])
-
-    def test_47_b(self):
-        self.mt('say "Hello World!";\n'
-                '# Comment here\n',
-                bf +
-                ' say "Hello World!";\n' +
-                ef +
-                sl(-2) +
-                'Comment here\n', ['Perl6'])
-
     # New comment syntax in Perl6. No PODs supported.
-    def test_48(self):
+    def test_49(self):
         self.mt('#`( embedded comment)\n',
                 sl(-3) +
                 'embedded comment\n', ['Perl6'])
 
     # S.
-    def test_49(self):
+    def test_50(self):
         self.mt('# Comment here\n',
                 sl(-3) +
                 'Comment here\n', ['S'])
 
     # Haskell.
-    def test_50(self):
+    def test_52(self):
         self.mt('putStrLn "Hello World!"\n'
                 '-- Comment here\n',
                 bf +
@@ -822,7 +807,7 @@ class TestCodeToRest(object):
                 sl(-2) +
                 'Comment here\n', ['Haskell'])
 
-    def test_51(self):
+    def test_53(self):
         self.mt('{-\n'
                 'multi-\n'
                 'line\n'
@@ -834,7 +819,7 @@ class TestCodeToRest(object):
                 'comment\n\n', ['Haskell'])
 
     # Delphi.
-    def test_52(self):
+    def test_54(self):
         self.mt('writeln(\'Hello World!\');\n'
                 '// Comment here\n',
                 bf +
@@ -843,7 +828,7 @@ class TestCodeToRest(object):
                 sl(-2) +
                 'Comment here\n', ['Delphi'])
 
-    def test_53(self):
+    def test_55(self):
         self.mt('{\n'
                 'multi-\n'
                 'line\n'
@@ -855,12 +840,12 @@ class TestCodeToRest(object):
                 'comment\n\n', ['Delphi'])
 
     # AppleScript.
-    def test_54_a(self):
+    def test_56_a(self):
         self.mt('-- Comment here\n',
                 sl(-3) +
                 'Comment here\n', ['AppleScript'])
 
-    def test_54_b(self):
+    def test_56_b(self):
         self.mt('display dialog "Hello World!"\n'
                 '-- Comment here\n',
                 bf +
@@ -869,7 +854,7 @@ class TestCodeToRest(object):
                 sl(-2) +
                 'Comment here\n', ['AppleScript'])
 
-    def test_55(self):
+    def test_57(self):
         self.mt('(*\n'
                 'multi-\n'
                 'line\n'
@@ -881,7 +866,7 @@ class TestCodeToRest(object):
                 'comment\n\n', ['AppleScript'])
 
     # Common Lisp.
-    def test_56(self):
+    def test_58(self):
         self.mt('(princ (code-char 69))\n'
                 '; Comment here\n',
                 bf +
@@ -890,7 +875,7 @@ class TestCodeToRest(object):
                 sl(-2) +
                 'Comment here\n', ['common-lisp'])
 
-    def test_57(self):
+    def test_59(self):
         self.mt('#|\n'
                 'multi-\n'
                 'line\n'
@@ -902,7 +887,7 @@ class TestCodeToRest(object):
                 'comment\n\n', ['common-lisp'])
 
     # Lua.
-    def test_58(self):
+    def test_60(self):
         self.mt('print(\'Hello World!\')\n'
                 '-- Comment here\n',
                 bf +
@@ -911,7 +896,7 @@ class TestCodeToRest(object):
                 sl(-2) +
                 'Comment here\n', ['Lua'])
 
-    def test_59(self):
+    def test_61(self):
         self.mt('--[[\n'
                 'multi-\n'
                 'line\n'
@@ -923,13 +908,13 @@ class TestCodeToRest(object):
                 'comment\n\n', ['Lua'])
 
     # Clojure.
-    def test_60(self):
+    def test_62(self):
         self.mt('; Comment here\n',
                 sl(-3) +
                 'Comment here\n', ['Clojure'])
 
     # Scheme.
-    def test_61(self):
+    def test_63(self):
         self.mt('Hello World!\n'
                 '; Comment here\n',
                 bf +
@@ -939,7 +924,7 @@ class TestCodeToRest(object):
                 'Comment here\n', ['Scheme'])
 
     # HTML.
-    def test_62(self):
+    def test_65(self):
         self.mt('<!--\n'
                 'multi-\n'
                 'line\n'
@@ -951,7 +936,7 @@ class TestCodeToRest(object):
                 'comment\n\n', ['HTML'])
 
     # Fortran.
-    def test_63(self):
+    def test_66(self):
         self.mt('write(*,*) "Hello World!"\n'
                 '! Comment here\n',
                 bf +
@@ -961,7 +946,7 @@ class TestCodeToRest(object):
                 'Comment here\n', ['Fortran'])
 
     # APL.
-    def test_64(self):
+    def test_67(self):
         self.mt('Hello World!\n'
                 '⍝ Comment here\n',
                 bf +
@@ -971,7 +956,7 @@ class TestCodeToRest(object):
                 'Comment here\n', ['APL'])
 
     # Makefile.
-    def test_65(self):
+    def test_68(self):
         self.mt('@echo \'Hello World!\'\n'
                 '# Comment here\n',
                 bf +
@@ -981,7 +966,7 @@ class TestCodeToRest(object):
                 'Comment here\n', ['Makefile'])
 
     # RPMSpec.
-    def test_66(self):
+    def test_69(self):
         self.mt('echo \'Hello World!\'\n'
                 '# Comment here\n',
                 bf +
@@ -991,12 +976,12 @@ class TestCodeToRest(object):
                 'Comment here\n', ['spec'])
 
     # Nimrod.
-    def test_67_a(self):
+    def test_70_a(self):
         self.mt('# Comment here\n',
                 sl(-3) +
                 'Comment here\n', ['Nimrod'])
 
-    def test_67_b(self):
+    def test_70_b(self):
         self.mt('Hello World!\n'
                 '# Comment here\n',
                 bf +
@@ -1006,17 +991,17 @@ class TestCodeToRest(object):
                 'Comment here\n', ['Nimrod'])
 
     # NSIS.
-    def test_68_a(self):
+    def test_71_a(self):
         self.mt('; Comment here\n',
                 sl(-3) +
                 'Comment here\n', ['NSIS'])
 
-    def test_68_b(self):
+    def test_71_b(self):
         self.mt('# Comment here\n',
                 sl(-3) +
                 'Comment here\n', ['NSIS'])
 
-    def test_68_c(self):
+    def test_71_c(self):
         self.mt('DetailPrint "Hello World!"\n'
                 '; Comment here\n',
                 bf +
@@ -1025,7 +1010,7 @@ class TestCodeToRest(object):
                 sl(-2) +
                 'Comment here\n', ['NSIS'])
 
-    def test_68_d(self):
+    def test_72_d(self):
         self.mt('DetailPrint "Hello World!"\n'
                 '# Comment here\n',
                 bf +
@@ -1035,7 +1020,7 @@ class TestCodeToRest(object):
                 'Comment here\n', ['NSIS'])
 
     # TeX.
-    def test_69(self):
+    def test_72(self):
         self.mt('Hello World!\n'
                 '% Comment here\n',
                 bf +
@@ -1045,7 +1030,7 @@ class TestCodeToRest(object):
                 'Comment here\n', ['TeX'])
 
     # Erlang.
-    def test_70(self):
+    def test_73(self):
         self.mt('Hello World!.\n'
                 '% Comment here\n',
                 bf +
@@ -1055,7 +1040,7 @@ class TestCodeToRest(object):
                 'Comment here\n', ['Erlang'])
 
     # QBasic.
-    def test_71(self):
+    def test_74(self):
         self.mt('PRINT "Hello World!";\n'
                 '\' Comment here\n',
                 bf +
@@ -1065,7 +1050,7 @@ class TestCodeToRest(object):
                 'Comment here\n', ['QBasic'])
 
     # VB.net.
-    def test_72(self):
+    def test_75(self):
         self.mt('Console.WriteLine("Hello World!")\n'
                 '\' Comment here\n',
                 bf +
@@ -1075,7 +1060,7 @@ class TestCodeToRest(object):
                 'Comment here\n', ['VB.net'])
 
     # REBOL.
-    def test_73(self):
+    def test_76(self):
         self.mt('view [text "Hello World!"]\n'
                 '; Comment here\n',
                 bf +
@@ -1085,12 +1070,12 @@ class TestCodeToRest(object):
                 'Comment here\n', ['REBOL'])
 
     # LLVM.
-    def test_74_a(self):
+    def test_77_a(self):
         self.mt('; Comment here\n',
                 sl(-3) +
                 'Comment here\n', ['LLVM'])
 
-    def test_74_b(self):
+    def test_77_b(self):
         self.mt('Hello World!\n'
                 '; Comment here\n',
                 bf +
@@ -1100,7 +1085,7 @@ class TestCodeToRest(object):
                 'Comment here\n', ['LLVM'])
 
     # Ada.
-    def test_75(self):
+    def test_78(self):
         self.mt('Put_Line("Hello World!");\n'
                 '-- Comment here\n',
                 bf +
@@ -1110,7 +1095,7 @@ class TestCodeToRest(object):
                 'Comment here\n', ['Ada'])
 
     # Eiffel.
-    def test_76(self):
+    def test_79(self):
         self.mt('print ("Hello World!%N")\n'
                 '-- Comment here\n',
                 bf +
@@ -1119,8 +1104,8 @@ class TestCodeToRest(object):
                 sl(-2) +
                 'Comment here\n', ['Eiffel'])
 
-    # vhdl.
-    def test_77(self):
+    # VHDL.
+    def test_80(self):
         self.mt('assert false report "Hello World!"\n'
                 '-- Comment here\n',
                 bf +
@@ -1130,7 +1115,7 @@ class TestCodeToRest(object):
                 'Comment here\n', ['vhdl'])
 
     # COBOL.
-    def test_78_a(self):
+    def test_81_a(self):
         self.mt('       DISPLAY "Hello World!".\n'
                 '      * Comment here\n',
                 bf +
@@ -1139,12 +1124,12 @@ class TestCodeToRest(object):
                 sl(-2) +
                 'Comment here\n', ['COBOL'])
 
-    def test_78_b(self):
+    def test_81_b(self):
         self.mt('      / Comment here\n',
                 sl(-3) +
                 'Comment here\n', ['COBOL'])
 
-    def test_78_c(self):
+    def test_81_c(self):
         self.mt('       DISPLAY "Hello World!"\n'
                 '      / Comment here\n',
                 bf +
@@ -1154,12 +1139,12 @@ class TestCodeToRest(object):
                 'Comment here\n', ['COBOL'])
 
     # INI.
-    def test_79_a(self):
+    def test_82_a(self):
         self.mt('; Comment here\n',
                 sl(-3) +
                 'Comment here\n', ['INI'])
 
-    def test_79_b(self):
+    def test_82_b(self):
         self.mt('Hello World!\n'
                 '; Comment here\n',
                 bf +
@@ -1169,12 +1154,12 @@ class TestCodeToRest(object):
                 'Comment here\n', ['INI'])
 
     # YAML.
-    def test_80_a(self):
+    def test_83_a(self):
         self.mt('# Comment here\n',
                 sl(-3) +
                 'Comment here\n', ['YAML'])
 
-    def test_80_b(self):
+    def test_83_b(self):
         self.mt('invoice: 34843\n'
                 '# Comment here\n',
                 bf +
@@ -1182,6 +1167,20 @@ class TestCodeToRest(object):
                 ef +
                 sl(-2) +
                 'Comment here\n', ['YAML'])
+
+    # DocString Testing
+    # =================
+
+    # Single Line.
+    def test_84_a(self):
+        print(code_to_rest_string(
+                'def foo():\n'
+                '    \"""single line docstring.\"""\n'
+                '    pass\n', alias = 'Python'))
+        self.mt('def foo():\n'
+                '    (\"""single line docstring.\""")\n'
+                '    pass\n',
+                'single line docstring.', ['Python'])
 
 # Fenced code block testing
 # =========================
@@ -1359,14 +1358,16 @@ py_lexer = COMMENT_DELIMITER_INFO[get_lexer_by_name('Python').name]
 class TestCodeToRestNew(object):
     # Check that a simple file or string is tokenized correctly.
     def test_1(self):
+        ## Character              1          2
+        ##  index       01234567890 12345678901234 56789
         test_py_code = '# A comment\nan_identifier\n'
-        test_token_list = [(Token.Comment.Single, '# A comment'),
-                           (Token.Text, '\n'),
-                           (Token.Name, 'an_identifier'),
-                           (Token.Text, '\n')]
+        test_token_list = [(0, Token.Comment.Single, '# A comment'),
+                           (11, Token.Text, '\n'),
+                           (12, Token.Name, 'an_identifier'),
+                           (25, Token.Text, '\n')]
 
         lexer = get_lexer_by_name('python')
-        token_list = list( lex(test_py_code, lexer) )
+        token_list = list( _pygments_lexer(test_py_code, lexer) )
         assert token_list == test_token_list
 
     test_c_code = \
@@ -1383,7 +1384,7 @@ main(){
     # Check grouping of a list of tokens.
     def test_2(self):
         lexer = get_lexer_by_name('c')
-        token_iter = lex(self.test_c_code, lexer)
+        token_iter = _pygments_lexer(self.test_c_code, lexer)
         # Capture both group and string for help in debugging.
         token_group = list(_group_lexer_tokens(token_iter, False, False))
         # But split the two into separate lists for unit tests.
@@ -1407,7 +1408,7 @@ main(){
         # `ensurenl <http://pygments.org/docs/lexers/>`_ option is True by
         # default.
         lexer = get_lexer_by_name('python')
-        token_iter = lex('', lexer)
+        token_iter = _pygments_lexer('', lexer)
         # Capture both group and string for help in debugging.
         token_group = list(_group_lexer_tokens(token_iter, True, False))
         assert token_group == [(_GROUP.whitespace, '\n')]
@@ -1415,7 +1416,7 @@ main(){
     # Check gathering of groups by newlines.
     def test_4(self):
         lexer = get_lexer_by_name('c')
-        token_iter = lex(self.test_c_code, lexer)
+        token_iter = _pygments_lexer(self.test_c_code, lexer)
         token_group = _group_lexer_tokens(token_iter, False, False)
         gathered_group = list(_gather_groups_on_newlines(token_group,
                                                          (1, 2, 2)))
@@ -1701,7 +1702,7 @@ main(){
     # From code to classification.
     def test_10(self):
         lexer = get_lexer_by_name('c')
-        token_iter = lex(self.test_c_code, lexer)
+        token_iter = _pygments_lexer(self.test_c_code, lexer)
         token_group = _group_lexer_tokens(token_iter, False, False)
         gathered_group = _gather_groups_on_newlines(token_group, (2, 2, 2))
         classified_group = list( _classify_groups(gathered_group, c_lexer) )
