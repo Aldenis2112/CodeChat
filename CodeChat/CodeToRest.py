@@ -56,6 +56,7 @@ from pygments.lexers import get_lexer_for_filename, get_lexer_by_name, \
 from pygments.util import text_type, guess_decode
 from pygments.lexer import _encoding_map
 from pygments.token import Token
+from pygments.filter import apply_filters
 import ast
 #
 # Local application imports
@@ -263,12 +264,12 @@ def _lexer_to_rest(
     # \1. Invoke a Pygments lexer on the provided source code, obtaining an
     #     iterable of tokens. Also analyze Python code for docstrings.
     #
-    token_iter = _pygments_lexer(code_str, lexer)
+    token_iter, ast_lineno, ast_docstring = _pygments_lexer(code_str, lexer)
 
     # \2. Combine tokens from the lexer into three groups: whitespace, comment,
     #     or other.
     token_group = _group_lexer_tokens(token_iter, comment_is_inline,
-                                      comment_is_block)
+                                      comment_is_block, ast_lineno, ast_docstring)
 
     # \3. Make a per-line list of [group, ws_len, string], so that the last
     #     string in each list ends with a newline. Change the group of block
@@ -295,25 +296,28 @@ def _pygments_lexer(
 
     # Pygments does some cleanup on the code given to it before lexing it. If this is Python code, we want to run AST on that cleaned-up version, so that AST results can be correlated with Pygments results. However, Pygments doesn't offer a way to do this; so, add that ability in to the detected lexer.
     preprocessed_code_str = _pygments_get_tokens_preprocess(lexer, code_str)
-    # Process this with AST if this is Python code, to find docstrings
+    # Process this with AST if this is Python or Python3 code, to find docstrings.
 
-    # Determine if file is Python
-    if lexer.name == 'Python' or lexer.name == 'Python3':
-        # Run AST analysis and store it in ast_result
-        global ast_lineno
-        global ast_docstring
+    # If found, store line number and docstring into ``ast_lineno`` and ``ast_docstring`` respectively.
+    ast_lineno = None
+    ast_docstring = None
+
+    # Determine if code is Python or Python3.
+    if lexer.name == 'Python' or lexer.name == 'Python 3':
+        # If so, walk through the preprocessed code to analyze each token.
         for _ in ast.walk(ast.parse(preprocessed_code_str)):
             try:
+                # Check if current token is a docstring.
                 d = ast.get_docstring(_)
                 if d:
+                    # If so, store current line number and token value.
                     ast_lineno = _.body[0].lineno
                     ast_docstring = d
             except (AttributeError, TypeError):
                 pass
-        pass
 
     # Now, run the lexer.
-    return lexer.get_tokens_unprocessed(preprocessed_code_str)
+    return _pygments_get_tokens_postprocess(lexer, preprocessed_code_str), ast_lineno, ast_docstring
 #
 # Pygments monkeypatching
 # ^^^^^^^^^^^^^^^^^^^^^^^
@@ -371,14 +375,15 @@ def _pygments_get_tokens_preprocess(self, text, unfiltered=False):
     # EDIT: This is not from the original Pygments code. It was added to return the preprocessed text.
     return text
 
-    # EDIT: This was removed, since we want the index of each token.
-    ##def streamer():
-    ##    for _, t, v in self.get_tokens_unprocessed(text):
-    ##        yield t, v
-    ##stream = streamer()
-    ##if not unfiltered:
-    ##    stream = apply_filters(stream, self.filters, self)
-    ##return stream
+# This code was copied from pygments.lexer.Lexer.get_token, v. 2.1.3 (the last few lines).
+def _pygments_get_tokens_postprocess(self, text, unfiltered=False):
+    def streamer():
+        for _, t, v in self.get_tokens_unprocessed(text):
+            yield t, v
+    stream = streamer()
+    if not unfiltered:
+        stream = apply_filters(stream, self.filters, self)
+    return stream
 #
 #
 # Step 2 of lexer_to_rest_
@@ -396,42 +401,38 @@ def _group_lexer_tokens(
   # .. _comment_is_block:
   #
   # When true, classify generic comment as block comments.
-  comment_is_block):
-
+  comment_is_block,
+  # Docstring line number found from AST scanning.
+  ast_lineno,
+  # Docstring token found from AST scanning.
+  ast_docstring):
 
     # Keep track of the current group and string.
-    index, tokentype, current_string = next(iter_token)
-    current_group = _group_for_tokentype(tokentype, comment_is_inline,
-                                         comment_is_block)
-    _debug_print('tokentype = {}, string = {}\n'.
-                format(tokentype, [current_string]))
-
+    current_string = ''
+    current_group = None
     # Walk through tokens.
-    compare = False
-    token_lineno = 1
-    for index, tokentype, string in iter_token:
-        if current_string == '\n':
-            # keep track of every newline
-            token_lineno += 1
-        if compare:
-            # compare token containing docstring with ast results
-            global ast_lineno
-            global ast_docstring
-            token_docstring = current_string[3:-3]
-            if (ast_lineno == token_lineno and ast_docstring == token_docstring):
-                # replace token with docstring in _group_for_tokentype
-                current_string = current_string[3:-3]
-                pass
-            compare = False
-            pass
+    for tokentype, string in iter_token:
+        _debug_print('tokentype = {}, string = {}\n'.
+                    format(tokentype, [string]))
+        # Increase token line no. for every newline found.
+        token_lineno = current_string.count('\n') + 1
         if tokentype == Token.Literal.String.Doc:
-            # compare next token
-            compare = True
+            _debug_print('ast_lineno = {}, ast_docstring = {}\n'.
+                  format(ast_lineno, ast_docstring))
+            _debug_print('token_lineno = {}, token_docstring = {}\n'.
+                  format(token_lineno, string[3:-3]))
+            # Compare token containing docstring with AST results.
+            if ast_lineno == token_lineno and ast_docstring == string[3:-3]:
+                tokentype = Token.Comment.Multiline
+                # Insert an extra space after the docstring delimiter, making this look like a reST commment.
+                string = string[0:3] + ' ' + string[3:]
         group = _group_for_tokentype(tokentype, comment_is_inline,
           comment_is_block)
 
         # If there's a change in group, yield what we've accumulated so far,
         # then initialize the state to the newly-found group and string.
+        if current_group is None:
+            current_group = group
         if current_group != group:
             yield current_group, current_string
             current_group = group
